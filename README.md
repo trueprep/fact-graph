@@ -35,9 +35,10 @@ curl http://localhost:8080/health
 ```
 
 ### Default dictionary
-The container loads `dictionaries/default.xml` by default (copied from `shared/src/test/resources/exampleAgiFacts.xml`). This is a self-contained demo dictionary with simple AGI calculations.
+The container loads all XML files from `fact_dictionaries/` by default and **merges** them into a single `FactDictionary` at startup (this matches how Direct File ships and uses these dictionaries).
 
-**Note**: The `fact_dictionaries/` folder contains 36 production dictionary files with cross-file dependencies. These cannot be loaded individually as they reference facts defined in other files. Future work: implement dictionary merging/importing to support loading multiple interdependent files.
+If you want the small demo dictionary instead, set:
+`FACT_DICTIONARY_PATH=/app/dictionaries/default.xml`
 
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.

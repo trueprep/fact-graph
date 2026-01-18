@@ -10,7 +10,7 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
-      - FACT_DICTIONARY_PATH=/app/dictionaries/default.xml
+      - FACT_DICTIONARY_PATH=/app/fact_dictionaries
       - JAVA_OPTS=-Xmx512m -Xms256m
     volumes:
       - ./dictionaries:/app/dictionaries:ro

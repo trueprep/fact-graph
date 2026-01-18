@@ -20,6 +20,7 @@ import gov.irs.factgraph.types.WritableType
 
 import scala.io.Source
 import java.io.File
+import scala.xml.{Elem, Node, NodeSeq, XML}
 
 // Request/Response case classes
 case class SetFactRequest(path: String, value: Json)
@@ -44,33 +45,34 @@ object FactGraphServer extends IOApp:
     val file = new File(defaultPath)
     
     if file.isDirectory then
-      // Load all XML files from directory
-      val xmlFiles = file.listFiles().filter(_.getName.endsWith(".xml"))
-      
+      val xmlFiles = file.listFiles().filter(_.getName.endsWith(".xml")).sortBy(_.getName)
+
       if xmlFiles.nonEmpty then
         println(s"Loading ${xmlFiles.length} dictionary files from $defaultPath")
-        
-        // Try loading each file individually first
+
         try
-          val dictionaries = xmlFiles.map { f =>
-            val xml = Source.fromFile(f).mkString
-            FactDictionary.importFromXml(xml)
-          }
-          
-          // Merge dictionaries (use first one as base)
-          currentDictionary = Some(dictionaries.head)
-          currentGraph = currentDictionary.map(d => Graph(d))
-          println(s"Successfully loaded ${xmlFiles.length} dictionary files individually")
+          val allFacts: Seq[Node] =
+            xmlFiles.flatMap { f =>
+              val moduleXml = XML.loadFile(f)
+              // Each file is expected to be a FactDictionaryModule; we extract all Fact nodes and merge them.
+              (moduleXml \\ "Fact")
+            }.toSeq
+
+          val combinedModule: Elem =
+            <FactDictionaryModule>
+              <Facts>{allFacts}</Facts>
+            </FactDictionaryModule>
+
+          val dictionary = FactDictionary.fromXml(NodeSeq.fromSeq(Seq(combinedModule)))
+          currentDictionary = Some(dictionary)
+          currentGraph = Some(Graph(dictionary))
+
+          println(s"Successfully loaded merged dictionary from ${xmlFiles.length} files")
           xmlFiles.foreach(f => println(s"  - ${f.getName}"))
         catch
           case e: Exception =>
-            println(s"Error loading dictionaries individually: ${e.getMessage}")
-            println("Falling back to first file only...")
-            // Fallback: try loading just the first file
-            val xml = Source.fromFile(xmlFiles.head).mkString
-            currentDictionary = Some(FactDictionary.importFromXml(xml))
-            currentGraph = currentDictionary.map(d => Graph(d))
-            println(s"Loaded single dictionary: ${xmlFiles.head.getName}")
+            println(s"Error loading merged dictionaries from directory '$defaultPath': ${e.getMessage}")
+            throw e
       else
         println(s"No XML files found in $defaultPath")
     else if file.exists() then
