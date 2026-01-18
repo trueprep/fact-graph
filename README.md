@@ -21,6 +21,24 @@ See [ONBOARDING.md](ONBOARDING.md) for environment/developer setup.
 See [the Fact Graph 3.1 ADR](docs/fact-graph-3.1-adr.md) for more information about the fact graph and how it has been changed since early 2025
 See [here](docs/from-3.0-to-3.1.md) for a brief description of changes between the older versions of the Fact Graph and the current v3.1 in this repository 
 
+## Fact Graph API (local demo)
+The repository includes a small REST API wrapper and a docker-compose definition for local testing.
+
+### Run the API
+```bash
+docker compose up --build
+```
+
+### Verify health
+```bash
+curl http://localhost:8080/health
+```
+
+### Default dictionary
+The container loads `dictionaries/default.xml` by default (copied from `shared/src/test/resources/exampleAgiFacts.xml`). This is a self-contained demo dictionary with simple AGI calculations.
+
+**Note**: The `fact_dictionaries/` folder contains 36 production dictionary files with cross-file dependencies. These cannot be loaded individually as they reference facts defined in other files. Future work: implement dictionary merging/importing to support loading multiple interdependent files.
+
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 

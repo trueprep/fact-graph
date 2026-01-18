@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  factgraph-api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: factgraph-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - FACT_DICTIONARY_PATH=/app/dictionaries/default.xml
+      - JAVA_OPTS=-Xmx512m -Xms256m
+    volumes:
+      - ./dictionaries:/app/dictionaries:ro
+      - ./fact_dictionaries:/app/fact_dictionaries:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout:  10s
+      retries:  3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - factgraph-network
+
+  # Optional: Add Redis for caching graph states
+  redis:
+    image:  redis:7-alpine
+    container_name: factgraph-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - factgraph-network
+
+networks:
+  factgraph-network:
+    driver: bridge
+
+volumes:
+  redis-data: 
