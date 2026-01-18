@@ -1,0 +1,375 @@
+# AGENTS.txt - Fact Graph Codebase Guide for AI Agents
+
+This document provides comprehensive technical documentation for AI agents and developers working with the Fact Graph codebase.
+
+---
+
+## 1. QUICK REFERENCE
+
+### 1.1 Project Identity
+
+**Project**: Fact Graph
+**Version**: 3.1.0-SNAPSHOT
+**Language**: Scala 3.3.6
+**Java Version**: 21.0.5
+**License**: CC0 1.0 (Public Domain)
+**Maintainer**: U.S. Internal Revenue Service
+**Purpose**: Production-ready knowledge graph library for modeling U.S. Internal Revenue Code and tax law
+**Cross-Compilation**: JavaScript (ES modules) and JVM platforms
+
+### 1.2 Key File Locations
+
+```
+Core Source Files:
+  shared/src/main/scala/gov/irs/factgraph/
+    ├── FactDictionary.scala       # Main dictionary class
+    ├── Graph.scala                # Fact graph instance API
+    ├── Fact.scala                 # Individual fact logic
+    ├── FactDefinition.scala       # Fact blueprint from dictionary
+    ├── Expression.scala           # Expression evaluation engine
+    ├── Path.scala                 # Path parsing and resolution
+    ├── Migrations.scala           # Data migration system
+    └── Meta.scala                 # Dictionary metadata
+
+Key Directories:
+  fact_dictionaries/               # XML Fact Dictionary files
+  shared/src/main/scala/gov/irs/factgraph/
+    ├── compnodes/                 # Computation node implementations
+    ├── types/                     # Value type definitions
+    ├── limits/                    # Validation limit implementations
+    ├── monads/                    # Result, MaybeVector, Thunk
+    ├── operators/                 # Operator trait definitions
+    ├── persisters/                # Persistence interfaces
+    └── definitions/               # XML parsing configuration
+
+Schema:
+  FactDictionaryModule.rng         # RelaxNG XML schema
+
+Documentation:
+  README.md                        # Project overview
+  ONBOARDING.md                    # Developer setup
+  CONTRIBUTING.md                  # Contribution guidelines
+  docs/fact-graph-3.1-adr.md       # Architecture decision record
+  docs/from-3.0-to-3.1.md          # Migration guide
+```
+
+### 1.3 Build Commands
+
+```bash
+# Compilation
+sbt compile                        # Compile JVM build
+sbt fastOptJS                      # Quick JS compilation (development)
+sbt fullOptJS                      # Production JS compilation (optimized)
+
+# Testing
+sbt test                           # Run all tests (JS + JVM)
+sbt testOnly TestName              # Run specific test
+sbt clean test                     # Clean build and test
+
+# Publishing
+sbt publishLocal                   # Publish to local repository
+
+# Utility
+sbt clean                          # Delete build artifacts
+```
+
+### 1.4 API Cheat Sheet
+
+**Loading Dictionary:**
+```scala
+val xmlString = Source.fromFile("dictionary.xml").mkString
+val dictionary = FactDictionary.importFromXml(xmlString)
+dictionary.freeze()  // Lock dictionary before use
+```
+
+**Creating Graph:**
+```scala
+val graph = Graph(dictionary)
+// or with custom persister
+val graph = Graph(dictionary, customPersister)
+```
+
+**Setting Facts:**
+```scala
+graph.set("/age", Int(22))
+graph.set("/filingStatus", Enum("/filingStatusOptions", "single"))
+graph.addToCollection("/collection", "uuid-string")
+```
+
+**Getting Facts:**
+```scala
+val result: Result[Int] = graph.get("/age")
+if (result.hasValue) {
+  val age = result.get  // Extract value
+}
+
+// For collections (returns vector)
+val results: Vector[Result[Int]] = graph.getVect("/collection/*/age")
+```
+
+**Validation & Persistence:**
+```scala
+val (valid, violations) = graph.save()
+if (!valid) {
+  violations.foreach(v => println(s"${v.limitName}: ${v.message}"))
+}
+```
+
+**Debugging:**
+```scala
+graph.explain("/factPath")           // Human-readable explanation
+graph.debugFact("/factPath")         // XML with current values
+graph.debugFactRecurse("/factPath")  // Full dependency tree
+```
+
+---
+
+## 2. DOCUMENTATION INDEX
+
+The comprehensive technical documentation has been organized into focused documents for easier navigation:
+
+### Core Documentation
+
+- **[Architecture Overview](docs/architecture-overview.md)** - System purpose, entity relationships, cross-platform design, and data flow
+- **[Core Concepts](docs/core-concepts.md)** - Fact Dictionary, Fact Graph, paths, and collections
+- **[FXML Schema Reference](docs/fxml-schema-reference.md)** - Complete XML schema documentation for defining fact dictionaries
+- **[Type System](docs/type-system.md)** - All writable types, value representation, and type checking behavior
+- **[Monads and Result Handling](docs/monads-and-result-handling.md)** - Result, MaybeVector, Thunk, and vectorization methods
+- **[Validation System](docs/validation-system.md)** - Limit types, LimitContext, LimitViolation, and intrinsic limits
+- **[Expression Evaluation](docs/expression-evaluation.md)** - Expression enum, evaluation flow, caching, and thunk resolution
+- **[Persistence Guide](docs/persistence-guide.md)** - Persister interface, InMemoryPersister, JSON format, and save/validate cycle
+
+### Existing Documentation
+
+- **[Architecture Decision Record](docs/fact-graph-3.1-adr.md)** - Version 3.1 design decisions
+- **[Migration Guide (3.0 to 3.1)](docs/from-3.0-to-3.1.md)** - Upgrading from version 3.0
+
+---
+
+## 3. QUICK START EXAMPLES
+
+### Example 1: Loading and Using a Dictionary
+
+```scala
+import gov.irs.factgraph._
+import gov.irs.factgraph.types._
+import scala.io.Source
+
+// Load dictionary from XML
+val xmlString = Source.fromFile("fact_dictionaries/filingStatus.xml").mkString
+val dictionary = FactDictionary.importFromXml(xmlString)
+dictionary.freeze()
+
+// Create graph
+val graph = Graph(dictionary)
+
+// Set user data
+graph.set("/age", Int(30))
+graph.set("/income", Dollar(5000000))  // $50,000.00 in cents
+
+// Get derived fact
+val taxCredit: Result[Dollar] = graph.get("/taxCredit")
+if (taxCredit.hasValue) {
+  println(s"Tax credit: ${taxCredit.get}")
+}
+
+// Validate and save
+val (valid, violations) = graph.save()
+if (valid) {
+  val json = graph.getPersister().toJson(indent = 2)
+  // Save JSON to database
+}
+```
+
+### Example 2: Working with Collections
+
+```scala
+// Add items to collection
+val uuid1 = java.util.UUID.randomUUID().toString
+val uuid2 = java.util.UUID.randomUUID().toString
+
+graph.addToCollection("/familyAndHousehold", uuid1)
+graph.addToCollection("/familyAndHousehold", uuid2)
+
+// Set values for collection items
+graph.set(s"/familyAndHousehold/#$uuid1/age", Int(8))
+graph.set(s"/familyAndHousehold/#$uuid1/name", Str("Alice"))
+graph.set(s"/familyAndHousehold/#$uuid2/age", Int(12))
+graph.set(s"/familyAndHousehold/#$uuid2/name", Str("Bob"))
+
+// Get all ages (wildcard path)
+val ages: Vector[Result[Int]] = graph.getVect("/familyAndHousehold/*/age")
+ages.foreach { age =>
+  if (age.hasValue) println(s"Age: ${age.get}")
+}
+```
+
+### Example 3: Custom Persister
+
+```scala
+class DatabasePersister(db: Database) extends Persister {
+  private val data = mutable.Map[String, WritableType]()
+
+  def setFact(fact: Fact, value: WritableType): Unit = {
+    data(fact.path.toString) = value
+    db.execute(s"UPDATE facts SET value = '${value.toJson}' WHERE path = '${fact.path}'")
+  }
+
+  def getSavedResult[A](path: Path, klass: Class[A]): Result[A] = {
+    data.get(path.toString) match {
+      case Some(value) if klass.isInstance(value) =>
+        Result.Complete(value.asInstanceOf[A])
+      case _ =>
+        Result.Incomplete
+    }
+  }
+
+  // ... implement other methods
+}
+
+// Use custom persister
+val persister = DatabasePersister(myDatabase)
+val graph = Graph(dictionary, persister)
+```
+
+---
+
+## 4. COMMON PATTERNS
+
+### Pattern: Conditional Tax Calculation
+
+```xml
+<Fact path="/standardDeduction">
+  <Derived>
+    <Switch>
+      <Case>
+        <When>
+          <Equal>
+            <Left><Dependency path="/filingStatus" /></Left>
+            <Right><String>single</String></Right>
+          </Equal>
+        </When>
+        <Then><Dollar>1395000</Dollar></Then>
+      </Case>
+      <Case>
+        <When>
+          <Equal>
+            <Left><Dependency path="/filingStatus" /></Left>
+            <Right><String>marriedFilingJointly</String></Right>
+          </Equal>
+        </When>
+        <Then><Dollar>2790000</Dollar></Then>
+      </Case>
+      <Case>
+        <When><True /></When>
+        <Then><Dollar>1395000</Dollar></Then>
+      </Case>
+    </Switch>
+  </Derived>
+</Fact>
+```
+
+### Pattern: Collection Aggregation
+
+```xml
+<Fact path="/totalDependents">
+  <Derived>
+    <Count>
+      <Dependency path="/familyAndHousehold/*/isDependent" />
+    </Count>
+  </Derived>
+</Fact>
+
+<Fact path="/totalChildCareExpenses">
+  <Derived>
+    <CollectionSum>
+      <Dependency path="/childCareExpenses/*/amount" />
+    </CollectionSum>
+  </Derived>
+</Fact>
+```
+
+### Pattern: Placeholder with Default Value
+
+```xml
+<Fact path="/dependents">
+  <Writable>
+    <Int />
+  </Writable>
+  <Placeholder>
+    <Int>0</Int>
+  </Placeholder>
+  <Limits>
+    <Min><Int>0</Int></Min>
+    <Max><Int>10</Int></Max>
+  </Limits>
+</Fact>
+```
+
+---
+
+## 5. TROUBLESHOOTING
+
+### Common Issues
+
+**Issue: "Dictionary not frozen"**
+```scala
+// Wrong:
+val dictionary = FactDictionary.importFromXml(xml)
+val graph = Graph(dictionary)  // Error!
+
+// Correct:
+val dictionary = FactDictionary.importFromXml(xml)
+dictionary.freeze()  // Must freeze first
+val graph = Graph(dictionary)  // OK
+```
+
+**Issue: "Type mismatch"**
+```scala
+// Wrong:
+graph.set("/age", Str("30"))  // Age is Int, not Str
+
+// Correct:
+graph.set("/age", Int(30))
+```
+
+**Issue: "Result is Incomplete"**
+```scala
+val result = graph.get("/derivedFact")
+if (result.hasValue) {
+  // Safe to access
+  val value = result.get
+} else {
+  // Handle incomplete - missing dependencies
+  println("Fact cannot be evaluated")
+}
+```
+
+### Debugging Tools
+
+```scala
+// Explain how a fact is calculated
+val explanation = graph.explain("/taxCredit")
+println(explanation)
+
+// Get XML debug output
+val xml = graph.debugFact("/taxCredit")
+println(xml)
+
+// Get full dependency tree
+val tree = graph.debugFactRecurse("/taxCredit")
+println(tree)
+```
+
+---
+
+## 6. ADDITIONAL RESOURCES
+
+- **GitHub Repository**: [https://github.com/IRS/fact-graph](https://github.com/IRS/fact-graph)
+- **Issue Tracker**: [https://github.com/IRS/fact-graph/issues](https://github.com/IRS/fact-graph/issues)
+- **Contributing**: See `CONTRIBUTING.md` for guidelines
+- **Onboarding**: See `ONBOARDING.md` for development environment setup
+
+---
+
+*For detailed technical documentation on specific topics, please refer to the documents in the Documentation Index (Section 2).*
