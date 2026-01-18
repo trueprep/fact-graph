@@ -138,6 +138,11 @@ The comprehensive technical documentation has been organized into focused docume
 - **[Validation System](docs/validation-system.md)** - Limit types, LimitContext, LimitViolation, and intrinsic limits
 - **[Expression Evaluation](docs/expression-evaluation.md)** - Expression enum, evaluation flow, caching, and thunk resolution
 - **[Persistence Guide](docs/persistence-guide.md)** - Persister interface, InMemoryPersister, JSON format, and save/validate cycle
+- **[Developer Guide](docs/developer-guide.md)** - Common development tasks, testing guidelines, and codebase organization
+- **[Module System](docs/module-system.md)** - How fact dictionaries are organized and cross-module dependencies
+- **[Migrations](docs/migrations.md)** - System for updating persisted fact graphs when dictionaries change
+- **[Integration Guide](docs/integration-guide.md)** - JavaScript, JVM, and Java integration with examples
+- **[Glossary](docs/glossary.md)** - Alphabetized definitions of all technical terms
 
 ### Existing Documentation
 
