@@ -40,6 +40,143 @@ The container loads all XML files from `fact_dictionaries/` by default and **mer
 If you want the small demo dictionary instead, set:
 `FACT_DICTIONARY_PATH=/app/dictionaries/default.xml`
 
+## Agent-facing API Endpoints
+
+The Fact Graph API includes endpoints designed for AI agents to discover, compute, and explain tax facts. All endpoints return JSON responses.
+
+### Health & Discovery
+
+- **`GET /health`**: Check API health
+  ```bash
+  curl http://localhost:8080/health
+  # {"status":"healthy","version":"3.1.0-SNAPSHOT"}
+  ```
+
+- **`GET /paths`**: List all available fact paths
+  ```bash
+  curl http://localhost:8080/paths
+  # {"paths":["/importedPrimaryFilerFirstName","/totalAdjustedGrossIncome",...]}
+  ```
+
+### Fact Introspection
+
+- **`GET /fact/definition?path=/factPath`**: Get metadata about a fact
+  ```bash
+  curl "http://localhost:8080/fact/definition?path=/importedPrimaryFilerFirstName"
+  # {"path":"/importedPrimaryFilerFirstName","typeNode":"StringNode","isWritable":true,"rawXml":"..."}
+  ```
+
+- **`GET /fact/raw_xml?path=/factPath`**: Get the raw XML definition
+  ```bash
+  curl "http://localhost:8080/fact/raw_xml?path=/importedPrimaryFilerFirstName"
+  # {"path":"/importedPrimaryFilerFirstName","xml":"<Fact path=\"/importedPrimaryFilerFirstName\">..."}
+  ```
+
+### Dependency Analysis
+
+- **`GET /fact/deps?path=/factPath`**: Get forward dependencies (what this fact needs)
+  ```bash
+  curl "http://localhost:8080/fact/deps?path=/totalAdjustedGrossIncome"
+  # {"path":"/totalAdjustedGrossIncome","dependencies":[{"path":"/totalWages","module":"income"}]}
+  ```
+
+- **`GET /fact/reverse_deps?path=/factPath`**: Get reverse dependencies (what depends on this fact)
+  ```bash
+  curl "http://localhost:8080/fact/reverse_deps?path=/totalWages"
+  # {"path":"/totalWages","reverseDependencies":["/totalAdjustedGrossIncome","/taxableIncome"]}
+  ```
+
+### Computation & Explanation
+
+- **`POST /fact/set`**: Set a writable fact value (supports typed JSON)
+  ```bash
+  # String fact
+  curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/importedPrimaryFilerFirstName","value":"John"}'
+  # {"path":"/importedPrimaryFilerFirstName","value":"John","success":true}
+
+  # Dollar fact (accepts number or string)
+  curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/totalWages","value":75000}'
+  # {"path":"/totalWages","value":"75000.00","success":true}
+
+  # Date fact (ISO-8601 string)
+  curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/someDate","value":"2024-01-15"}'
+  # {"path":"/someDate","value":"2024-01-15","success":true}
+
+  # TIN fact
+  curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/someTin","value":"123456789"}'
+  # {"path":"/someTin","value":"123-45-6789","success":true}
+  ```
+
+- **`POST /fact/get`**: Get a fact value (including computed/derived facts)
+  ```bash
+  curl -X POST http://localhost:8080/fact/get -H "Content-Type: application/json" -d '{"path":"/totalAdjustedGrossIncome"}'
+  # {"path":"/totalAdjustedGrossIncome","value":"75000.00","success":true}
+  ```
+
+- **`GET /fact/explain?path=/factPath&includeXml=true`**: Get structured explanation
+  ```bash
+  curl "http://localhost:8080/fact/explain?path=/totalAdjustedGrossIncome&includeXml=true"
+  # {
+  #   "path": "/totalAdjustedGrossIncome",
+  #   "currentValue": "75000.00",
+  #   "isComplete": true,
+  #   "dependencies": [
+  #     {"path": "/totalWages", "currentValue": "75000.00", "isComplete": true, "rawXml": "..."},
+  #     {"path": "/totalAdjustments", "currentValue": "0.00", "isComplete": true, "rawXml": "..."}
+  #   ],
+  #   "rawXml": "..."
+  # }
+  ```
+
+### Graph State Management
+
+- **`GET /graph`**: Export current graph state as JSON
+  ```bash
+  curl http://localhost:8080/graph
+  # {"factPath": {"item": "factValue"}, ...}
+  ```
+
+- **`POST /graph/reset`**: Reset graph to empty state (keeps dictionary)
+  ```bash
+  curl -X POST http://localhost:8080/graph/reset
+  # {"success": true}
+  ```
+
+- **`POST /graph/load`**: Load graph state from JSON
+  ```bash
+  curl -X POST http://localhost:8080/graph/load -H "Content-Type: application/json" -d '{"json": "..."}'
+  # {"success": true}
+  ```
+
+- **`POST /graph/snapshot`**: Get snapshot with metadata
+  ```bash
+  curl -X POST http://localhost:8080/graph/snapshot
+  # {"snapshot": "...", "timestamp": 1705123456789, "factCount": 150}
+  ```
+
+- **`POST /graph/diff`**: Compare two snapshots
+  ```bash
+  curl -X POST http://localhost:8080/graph/diff -H "Content-Type: application/json" -d '{"beforeSnapshot": "...", "afterSnapshot": "..."}'
+  # {"changedPaths": ["/totalWages"], "addedPaths": ["/newFact"], "removedPaths": []}
+  ```
+
+### Supported Fact Types
+
+The `/fact/set` and `/facts/set` endpoints support these fact types with automatic type coercion:
+
+- `StringNode`: JSON string
+- `IntNode`: JSON number or numeric string
+- `BooleanNode`: JSON boolean or "true"/"false" string
+- `DollarNode`: JSON number or currency string (e.g. "75000", "75,000.00")
+- `DayNode`: ISO-8601 date string (e.g. "2024-01-15")
+- `TinNode`: 9-digit string (formatted as XXX-XX-XXXX)
+- `EinNode`: 9-digit string (formatted as XX-XXXXXXX)
+- `IpPinNode`: IP PIN string
+- `PhoneNumberNode`: Phone number string (E.164 format)
+- `EmailAddressNode`: Email string
+
+Type validation errors return structured error messages for agent handling.
+
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 

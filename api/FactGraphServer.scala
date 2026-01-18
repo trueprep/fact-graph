@@ -15,12 +15,12 @@ import com.comcast.ip4s.*
 
 import gov.irs.factgraph.{FactDictionary, Graph, Path}
 import gov.irs.factgraph.persisters.InMemoryPersister
-import gov.irs.factgraph.types.Dollar
-import gov.irs.factgraph.types.WritableType
+import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, WritableType}
 
 import scala.io.Source
 import java.io.File
 import scala.xml.{Elem, Node, NodeSeq, XML}
+import upickle.default.read
 
 // Request/Response case classes
 case class SetFactRequest(path: String, value: Json)
@@ -32,12 +32,26 @@ case class FactResponse(path: String, value: Option[String], success: Boolean, e
 case class GraphResponse(json: String)
 case class PathsResponse(paths: List[String])
 case class HealthResponse(status: String, version: String)
+case class FactDefinitionResponse(path: String, typeNode: String, isWritable: Boolean, rawXml: String)
+case class RawXmlResponse(path: String, xml: String)
+case class DependencyResponse(path: String, dependencies: List[DependencyInfo])
+case class ReverseDependencyResponse(path: String, reverseDependencies: List[String])
+case class DependencyInfo(path: String, module: Option[String])
+case class ExplainResponse(path: String, currentValue: Option[String], isComplete: Boolean, dependencies: List[ExplainNode], rawXml: Option[String])
+case class ExplainNode(path: String, currentValue: Option[String], isComplete: Boolean, rawXml: Option[String])
+case class GraphSnapshotResponse(snapshot: String, timestamp: Long, factCount: Int)
+case class GraphDiffRequest(beforeSnapshot: String, afterSnapshot: String)
+case class GraphDiffResponse(changedPaths: List[String], addedPaths: List[String], removedPaths: List[String])
 
 object FactGraphServer extends IOApp: 
   
   // Thread-safe state management
   private var currentDictionary: Option[FactDictionary] = None
   private var currentGraph: Option[Graph] = None
+
+  // Dependency indexes built at startup
+  private var forwardDeps: Map[String, List[DependencyInfo]] = Map.empty
+  private var reverseDeps: Map[String, Set[String]] = Map.empty
   
   // Load dictionary from file or directory
   private def loadDefaultDictionary(): Unit =
@@ -67,6 +81,9 @@ object FactGraphServer extends IOApp:
           currentDictionary = Some(dictionary)
           currentGraph = Some(Graph(dictionary))
 
+          // Build dependency indexes
+          buildDependencyIndexes(dictionary)
+
           println(s"Successfully loaded merged dictionary from ${xmlFiles.length} files")
           xmlFiles.foreach(f => println(s"  - ${f.getName}"))
         catch
@@ -78,10 +95,51 @@ object FactGraphServer extends IOApp:
     else if file.exists() then
       // Single file
       val xml = Source.fromFile(file).mkString
-      currentDictionary = Some(FactDictionary.importFromXml(xml))
-      currentGraph = currentDictionary.map(d => Graph(d))
+      val dictionary = FactDictionary.importFromXml(xml)
+      currentDictionary = Some(dictionary)
+      currentGraph = Some(Graph(dictionary))
+
+      // Build dependency indexes
+      buildDependencyIndexes(dictionary)
+
       println(s"Loaded dictionary from $defaultPath")
-  
+
+  // Build forward and reverse dependency indexes from dictionary XML
+  private def buildDependencyIndexes(dictionary: FactDictionary): Unit =
+    val forwardDepsBuilder = scala.collection.mutable.Map[String, List[DependencyInfo]]()
+    val reverseDepsBuilder = scala.collection.mutable.Map[String, scala.collection.mutable.Set[String]]()
+
+    // Parse each fact's XML for dependencies
+    dictionary.getDefinitionsAsNodes().foreach { case (path, xmlNode) =>
+      val factPath = path.toString
+      val dependencies = scala.collection.mutable.ListBuffer[DependencyInfo]()
+
+      // Find all Dependency nodes in this fact's XML
+      val depNodes = xmlNode \\ "Dependency"
+      depNodes.foreach { depNode =>
+        val depPath = (depNode \ "@path").text.trim
+        val depModule = (depNode \ "@module").text.trim match
+          case "" => None
+          case m => Some(m)
+
+        dependencies += DependencyInfo(depPath, depModule)
+
+        // Add to reverse index
+        val reverseSet = reverseDepsBuilder.getOrElseUpdate(depPath, scala.collection.mutable.Set[String]())
+        reverseSet += factPath
+      }
+
+      if (dependencies.nonEmpty) {
+        forwardDepsBuilder(factPath) = dependencies.toList
+      }
+    }
+
+    // Convert mutable to immutable
+    forwardDeps = forwardDepsBuilder.toMap
+    reverseDeps = reverseDepsBuilder.map { case (k, v) => (k, v.toSet) }.toMap
+
+    println(s"Built dependency indexes: ${forwardDeps.size} facts with dependencies, ${reverseDeps.size} dependency targets")
+
   // Routes
   val routes: HttpRoutes[IO] = HttpRoutes.of[IO] {
     
@@ -96,6 +154,10 @@ object FactGraphServer extends IOApp:
           val dictionary = FactDictionary.importFromXml(body.xml)
           currentDictionary = Some(dictionary)
           currentGraph = Some(Graph(dictionary))
+
+          // Build dependency indexes
+          buildDependencyIndexes(dictionary)
+
           Ok(Json.obj("success" -> true. asJson, "message" -> "Dictionary loaded successfully". asJson))
         catch
           case e: Exception =>
@@ -110,7 +172,117 @@ object FactGraphServer extends IOApp:
           Ok(PathsResponse(paths).asJson)
         case None =>
           BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
-    
+
+    // Get fact definition metadata
+    case GET -> Root / "fact" / "definition" :? pathParam =>
+      currentGraph match
+        case Some(graph) =>
+          val pathStr = pathParam.getOrElse("path", Nil).headOption
+          pathStr match
+            case Some(p) =>
+              val maybeDefinition = graph.dictionary.getDefinition(p)
+              if (maybeDefinition != null) then
+                // Determine if writable by checking if there's a derived node
+                val rawXml = graph.dictionary.getDefinitionsAsNodes().get(Path(p))
+                val isWritable = rawXml.exists(xml => (xml \\ "Writable").nonEmpty)
+                Ok(FactDefinitionResponse(p, maybeDefinition.typeNode, isWritable, rawXml.map(_.toString).getOrElse("")).asJson)
+              else
+                NotFound(Json.obj("error" -> s"Fact not found: $p".asJson))
+            case None =>
+              BadRequest(Json.obj("error" -> "Missing 'path' query parameter".asJson))
+        case None =>
+          BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
+    // Get raw XML for a fact
+    case GET -> Root / "fact" / "raw_xml" :? pathParam =>
+      currentGraph match
+        case Some(graph) =>
+          val pathStr = pathParam.getOrElse("path", Nil).headOption
+          pathStr match
+            case Some(p) =>
+              val rawXml = graph.dictionary.getDefinitionsAsNodes().get(Path(p))
+              rawXml match
+                case Some(xml) =>
+                  Ok(RawXmlResponse(p, xml.toString).asJson)
+                case None =>
+                  NotFound(Json.obj("error" -> s"Raw XML not found for fact: $p".asJson))
+            case None =>
+              BadRequest(Json.obj("error" -> "Missing 'path' query parameter".asJson))
+        case None =>
+          BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
+    // Get forward dependencies for a fact
+    case GET -> Root / "fact" / "deps" :? pathParam =>
+      currentGraph match
+        case Some(graph) =>
+          val pathStr = pathParam.getOrElse("path", Nil).headOption
+          pathStr match
+            case Some(p) =>
+              val deps = forwardDeps.getOrElse(p, List.empty)
+              Ok(DependencyResponse(p, deps).asJson)
+            case None =>
+              BadRequest(Json.obj("error" -> "Missing 'path' query parameter".asJson))
+        case None =>
+          BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
+    // Get reverse dependencies for a fact
+    case GET -> Root / "fact" / "reverse_deps" :? pathParam =>
+      currentGraph match
+        case Some(graph) =>
+          val pathStr = pathParam.getOrElse("path", Nil).headOption
+          pathStr match
+            case Some(p) =>
+              val reverseDepsList = reverseDeps.getOrElse(p, Set.empty).toList.sorted
+              Ok(ReverseDependencyResponse(p, reverseDepsList).asJson)
+            case None =>
+              BadRequest(Json.obj("error" -> "Missing 'path' query parameter".asJson))
+        case None =>
+          BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
+    // Explain a fact with dependency tree and current values
+    case GET -> Root / "fact" / "explain" :? pathParam :? includeXmlParam =>
+      currentGraph match
+        case Some(graph) =>
+          val pathStr = pathParam.getOrElse("path", Nil).headOption
+          val includeXml = includeXmlParam.getOrElse("includeXml", Nil).headOption.getOrElse("false").toBoolean
+          pathStr match
+            case Some(p) =>
+              try
+                // Get current value and completeness for root fact
+                val currentResult = graph.get(Path(p))
+                val currentValue = currentResult.value.map(_.toString)
+                val isComplete = currentResult.complete
+
+                // Get dependencies and their current state
+                val deps = forwardDeps.getOrElse(p, List.empty)
+                val explainNodes = deps.flatMap { dep =>
+                  try
+                    val depResult = graph.get(Path(dep.path))
+                    val depValue = depResult.value.map(_.toString)
+                    val depComplete = depResult.complete
+                    val depXml = if (includeXml) {
+                      graph.dictionary.getDefinitionsAsNodes().get(Path(dep.path)).map(_.toString)
+                    } else None
+
+                    Some(ExplainNode(dep.path, depValue, depComplete, depXml))
+                  catch
+                    case _: Exception => None // Skip dependencies that can't be evaluated
+                }
+
+                // Get raw XML for root fact if requested
+                val rootXml = if (includeXml) {
+                  graph.dictionary.getDefinitionsAsNodes().get(Path(p)).map(_.toString)
+                } else None
+
+                Ok(ExplainResponse(p, currentValue, isComplete, explainNodes, rootXml).asJson)
+              catch
+                case e: Exception =>
+                  BadRequest(Json.obj("error" -> s"Failed to explain fact '$p': ${e.getMessage}".asJson))
+            case None =>
+              BadRequest(Json.obj("error" -> "Missing 'path' query parameter".asJson))
+        case None =>
+          BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
     // Set a single fact
     case req @ POST -> Root / "fact" / "set" =>
       req.as[SetFactRequest].flatMap { body =>
@@ -167,6 +339,47 @@ object FactGraphServer extends IOApp:
                       body.value.asString match
                         case Some(s) => Right(s)
                         case None    => Left("Expected a string")
+                    case "DayNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(Day(s))
+                          catch case e: Exception => Left(s"Invalid date format: ${e.getMessage}")
+                        case None =>
+                          body.value.asNumber.flatMap(_.toLong) match
+                            case Some(epochMs) =>
+                              try Right(Day(java.time.LocalDate.ofEpochDay(epochMs / (24 * 60 * 60 * 1000))))
+                              catch case e: Exception => Left(s"Invalid epoch timestamp: ${e.getMessage}")
+                            case None => Left("Expected a date string (ISO-8601) or epoch timestamp")
+                    case "TinNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(Tin(s))
+                          catch case e: Exception => Left(s"Invalid TIN format: ${e.getMessage}")
+                        case None => Left("Expected a TIN string")
+                    case "EinNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(Ein(s))
+                          catch case e: Exception => Left(s"Invalid EIN format: ${e.getMessage}")
+                        case None => Left("Expected an EIN string")
+                    case "IpPinNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(IpPin(s))
+                          catch case e: Exception => Left(s"Invalid IP PIN format: ${e.getMessage}")
+                        case None => Left("Expected an IP PIN string")
+                    case "PhoneNumberNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(PhoneNumber(s))
+                          catch case e: Exception => Left(s"Invalid phone number format: ${e.getMessage}")
+                        case None => Left("Expected a phone number string")
+                    case "EmailAddressNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(EmailAddress(s))
+                          catch case e: Exception => Left(s"Invalid email format: ${e.getMessage}")
+                        case None =>                       Left("Expected an email string")
                     case other =>
                       Left(s"Unsupported writable type: $other")
 
@@ -251,6 +464,47 @@ object FactGraphServer extends IOApp:
                         fact.value.asString match
                           case Some(s) => Right(s)
                           case None    => Left("Expected a string")
+                      case "DayNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(Day(s))
+                            catch case e: Exception => Left(s"Invalid date format: ${e.getMessage}")
+                          case None =>
+                            fact.value.asNumber.flatMap(_.toLong) match
+                              case Some(epochMs) =>
+                                try Right(Day(java.time.LocalDate.ofEpochDay(epochMs / (24 * 60 * 60 * 1000))))
+                                catch case e: Exception => Left(s"Invalid epoch timestamp: ${e.getMessage}")
+                              case None => Left("Expected a date string (ISO-8601) or epoch timestamp")
+                      case "TinNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(Tin(s))
+                            catch case e: Exception => Left(s"Invalid TIN format: ${e.getMessage}")
+                          case None => Left("Expected a TIN string")
+                      case "EinNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(Ein(s))
+                            catch case e: Exception => Left(s"Invalid EIN format: ${e.getMessage}")
+                          case None => Left("Expected an EIN string")
+                      case "IpPinNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(IpPin(s))
+                            catch case e: Exception => Left(s"Invalid IP PIN format: ${e.getMessage}")
+                          case None => Left("Expected an IP PIN string")
+                      case "PhoneNumberNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(PhoneNumber(s))
+                            catch case e: Exception => Left(s"Invalid phone number format: ${e.getMessage}")
+                          case None => Left("Expected a phone number string")
+                      case "EmailAddressNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(EmailAddress(s))
+                            catch case e: Exception => Left(s"Invalid email format: ${e.getMessage}")
+                          case None =>                       Left("Expected an email string")
                       case other =>
                         Left(s"Unsupported writable type: $other")
 
@@ -328,6 +582,53 @@ object FactGraphServer extends IOApp:
           Ok(Json.obj("success" -> true. asJson))
         case None =>
           BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
+
+    // Get a snapshot of current graph state with metadata
+    case POST -> Root / "graph" / "snapshot" =>
+      currentGraph match
+        case Some(graph) =>
+          val json = graph.persister.asInstanceOf[InMemoryPersister].toJson(2)
+          val factCount = graph.dictionary.getPaths().size
+          val timestamp = System.currentTimeMillis()
+          Ok(GraphSnapshotResponse(json, timestamp, factCount).asJson)
+        case None =>
+          BadRequest(Json.obj("error" -> "No graph initialized".asJson))
+
+    // Compare two snapshots and return differences
+    case req @ POST -> Root / "graph" / "diff" =>
+      req.as[GraphDiffRequest].flatMap { body =>
+        try
+          // Parse both snapshots as JSON objects
+          val beforeJson = parse(body.beforeSnapshot).getOrElse(Json.obj())
+          val afterJson = parse(body.afterSnapshot).getOrElse(Json.obj())
+
+          // Extract fact maps, filtering out metadata fields
+          val beforeFacts = beforeJson.asObject.map(_.toMap).getOrElse(Map.empty[String, Json])
+            .filterNot { case (k, _) => k == "migrations" }
+          val afterFacts = afterJson.asObject.map(_.toMap).getOrElse(Map.empty[String, Json])
+            .filterNot { case (k, _) => k == "migrations" }
+
+          // Get all paths
+          val beforePaths = beforeFacts.keySet
+          val afterPaths = afterFacts.keySet
+
+          // Calculate differences
+          val addedPaths = (afterPaths -- beforePaths).toList.sorted
+          val removedPaths = (beforePaths -- afterPaths).toList.sorted
+          val potentiallyChangedPaths = (beforePaths intersect afterPaths).toList
+
+          // Check which overlapping paths actually changed
+          val changedPaths = potentiallyChangedPaths.filter { path =>
+            val beforeValue = beforeFacts.get(path)
+            val afterValue = afterFacts.get(path)
+            beforeValue != afterValue
+          }.sorted
+
+          Ok(GraphDiffResponse(changedPaths, addedPaths, removedPaths).asJson)
+        catch
+          case e: Exception =>
+            BadRequest(Json.obj("error" -> s"Failed to diff snapshots: ${e.getMessage}".asJson))
+      }
   }
   
   override def run(args: List[String]): IO[ExitCode] =
