@@ -22,7 +22,7 @@ lazy val root = project
       "io.circe" %% "circe-parser" % "0.14.10",
       
       // Logging
-      "ch.qos. logback" % "logback-classic" % "1.5.16"
+      "ch.qos.logback" % "logback-classic" % "1.5.16"
     ),
     
     // Assembly settings for fat JAR

@@ -61,6 +61,7 @@ COPY --from=api-builder /api/target/scala-3.3.6/factgraph-api-assembly-*.jar ./f
 
 # Copy any fact dictionary XML files you need
 COPY dictionaries/ ./dictionaries/
+COPY fact_dictionaries/ ./fact_dictionaries/
 
 # Expose API port
 EXPOSE 8080

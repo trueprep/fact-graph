@@ -13,15 +13,16 @@ import io.circe. parser.*
 import io.circe.syntax.*
 import com.comcast.ip4s.*
 
-import gov.irs.factgraph.*
-import gov.irs.factgraph.persisters. InMemoryPersister
-import gov.irs.factgraph. types.*
+import gov.irs.factgraph.{FactDictionary, Graph, Path}
+import gov.irs.factgraph.persisters.InMemoryPersister
+import gov.irs.factgraph.types.Dollar
+import gov.irs.factgraph.types.WritableType
 
 import scala.io.Source
-import java.io. File
+import java.io.File
 
 // Request/Response case classes
-case class SetFactRequest(path: String, value: String)
+case class SetFactRequest(path: String, value: Json)
 case class GetFactRequest(path: String)
 case class BatchSetRequest(facts: List[SetFactRequest])
 case class LoadDictionaryRequest(xml: String)
@@ -37,15 +38,47 @@ object FactGraphServer extends IOApp:
   private var currentDictionary: Option[FactDictionary] = None
   private var currentGraph: Option[Graph] = None
   
-  // Load default dictionary from file if exists
+  // Load dictionary from file or directory
   private def loadDefaultDictionary(): Unit =
-    val defaultPath = sys.env.getOrElse("FACT_DICTIONARY_PATH", "/app/dictionaries/default.xml")
+    val defaultPath = sys.env.getOrElse("FACT_DICTIONARY_PATH", "/app/dictionaries")
     val file = new File(defaultPath)
-    if file.exists() then
+    
+    if file.isDirectory then
+      // Load all XML files from directory
+      val xmlFiles = file.listFiles().filter(_.getName.endsWith(".xml"))
+      
+      if xmlFiles.nonEmpty then
+        println(s"Loading ${xmlFiles.length} dictionary files from $defaultPath")
+        
+        // Try loading each file individually first
+        try
+          val dictionaries = xmlFiles.map { f =>
+            val xml = Source.fromFile(f).mkString
+            FactDictionary.importFromXml(xml)
+          }
+          
+          // Merge dictionaries (use first one as base)
+          currentDictionary = Some(dictionaries.head)
+          currentGraph = currentDictionary.map(d => Graph(d))
+          println(s"Successfully loaded ${xmlFiles.length} dictionary files individually")
+          xmlFiles.foreach(f => println(s"  - ${f.getName}"))
+        catch
+          case e: Exception =>
+            println(s"Error loading dictionaries individually: ${e.getMessage}")
+            println("Falling back to first file only...")
+            // Fallback: try loading just the first file
+            val xml = Source.fromFile(xmlFiles.head).mkString
+            currentDictionary = Some(FactDictionary.importFromXml(xml))
+            currentGraph = currentDictionary.map(d => Graph(d))
+            println(s"Loaded single dictionary: ${xmlFiles.head.getName}")
+      else
+        println(s"No XML files found in $defaultPath")
+    else if file.exists() then
+      // Single file
       val xml = Source.fromFile(file).mkString
       currentDictionary = Some(FactDictionary.importFromXml(xml))
       currentGraph = currentDictionary.map(d => Graph(d))
-      println(s"Loaded default dictionary from $defaultPath")
+      println(s"Loaded dictionary from $defaultPath")
   
   // Routes
   val routes: HttpRoutes[IO] = HttpRoutes.of[IO] {
@@ -71,20 +104,89 @@ object FactGraphServer extends IOApp:
     case GET -> Root / "paths" =>
       currentGraph match
         case Some(graph) =>
-          val paths = graph.dictionary.paths.map(_. toString).toList
+          val paths = graph.dictionary.getPaths().map(_.toString).toList
           Ok(PathsResponse(paths).asJson)
         case None =>
           BadRequest(Json.obj("error" -> "No dictionary loaded".asJson))
     
     // Set a single fact
     case req @ POST -> Root / "fact" / "set" =>
-      req.as[SetFactRequest]. flatMap { body =>
+      req.as[SetFactRequest].flatMap { body =>
         currentGraph match
           case Some(graph) =>
             try
-              graph.set(Path(body.path), body.value)
-              graph.save()
-              Ok(FactResponse(body.path, Some(body.value), success = true).asJson)
+              val maybeDefinition = graph.dictionary.getDefinition(body.path)
+              if (maybeDefinition == null) then
+                BadRequest(
+                  FactResponse(
+                    body.path,
+                    None,
+                    success = false,
+                    error = Some(s"Unknown fact path: ${body.path}"),
+                  ).asJson,
+                )
+              else
+                val typeNode = maybeDefinition.typeNode
+                val coerced: Either[String, WritableType] =
+                  typeNode match
+                    case "DollarNode" =>
+                      body.value.asNumber.flatMap(_.toBigDecimal) match
+                        case Some(n) => Right(Dollar(n))
+                        case None =>
+                          body.value.asString match
+                            case Some(s) =>
+                              try Right(Dollar(s))
+                              catch case e: Exception => Left(e.getMessage)
+                            case None =>
+                              Left("Expected a number or numeric string")
+                    case "IntNode" =>
+                      body.value.asNumber.flatMap(_.toInt) match
+                        case Some(i) => Right(i)
+                        case None =>
+                          body.value.asString match
+                            case Some(s) =>
+                              try Right(s.toInt)
+                              catch case e: Exception => Left(e.getMessage)
+                            case None =>
+                              Left("Expected an integer")
+                    case "BooleanNode" =>
+                      body.value.asBoolean match
+                        case Some(b) => Right(b)
+                        case None =>
+                          body.value.asString match
+                            case Some(s) =>
+                              s.trim.toLowerCase match
+                                case "true"  => Right(true)
+                                case "false" => Right(false)
+                                case _       => Left("Expected 'true' or 'false'")
+                            case None =>
+                              Left("Expected a boolean")
+                    case "StringNode" =>
+                      body.value.asString match
+                        case Some(s) => Right(s)
+                        case None    => Left("Expected a string")
+                    case other =>
+                      Left(s"Unsupported writable type: $other")
+
+                coerced match
+                  case Left(err) =>
+                    BadRequest(
+                      FactResponse(body.path, None, success = false, error = Some(err)).asJson,
+                    )
+                  case Right(writable) =>
+                    val (ok, violations) = graph.set(Path(body.path), writable)
+                    if ok then Ok(FactResponse(body.path, Some(writable.toString), success = true).asJson)
+                    else
+                      BadRequest(
+                        FactResponse(
+                          body.path,
+                          None,
+                          success = false,
+                          error = Some(
+                            s"Limit violation(s): ${violations.map(_.toString).mkString("; ")}",
+                          ),
+                        ).asJson,
+                      )
             catch
               case e: Exception =>
                 BadRequest(FactResponse(body.path, None, success = false, error = Some(e.getMessage)).asJson)
@@ -99,16 +201,79 @@ object FactGraphServer extends IOApp:
           case Some(graph) =>
             val results = body.facts.map { fact =>
               try
-                graph. set(Path(fact.path), fact.value)
-                FactResponse(fact.path, Some(fact.value), success = true)
+                val maybeDefinition = graph.dictionary.getDefinition(fact.path)
+                if (maybeDefinition == null) then
+                  FactResponse(
+                    fact.path,
+                    None,
+                    success = false,
+                    error = Some(s"Unknown fact path: ${fact.path}"),
+                  )
+                else
+                  val typeNode = maybeDefinition.typeNode
+                  val coerced: Either[String, WritableType] =
+                    typeNode match
+                      case "DollarNode" =>
+                        fact.value.asNumber.flatMap(_.toBigDecimal) match
+                          case Some(n) => Right(Dollar(n))
+                          case None =>
+                            fact.value.asString match
+                              case Some(s) =>
+                                try Right(Dollar(s))
+                                catch case e: Exception => Left(e.getMessage)
+                              case None =>
+                                Left("Expected a number or numeric string")
+                      case "IntNode" =>
+                        fact.value.asNumber.flatMap(_.toInt) match
+                          case Some(i) => Right(i)
+                          case None =>
+                            fact.value.asString match
+                              case Some(s) =>
+                                try Right(s.toInt)
+                                catch case e: Exception => Left(e.getMessage)
+                              case None =>
+                                Left("Expected an integer")
+                      case "BooleanNode" =>
+                        fact.value.asBoolean match
+                          case Some(b) => Right(b)
+                          case None =>
+                            fact.value.asString match
+                              case Some(s) =>
+                                s.trim.toLowerCase match
+                                  case "true"  => Right(true)
+                                  case "false" => Right(false)
+                                  case _       => Left("Expected 'true' or 'false'")
+                              case None =>
+                                Left("Expected a boolean")
+                      case "StringNode" =>
+                        fact.value.asString match
+                          case Some(s) => Right(s)
+                          case None    => Left("Expected a string")
+                      case other =>
+                        Left(s"Unsupported writable type: $other")
+
+                  coerced match
+                    case Left(err) =>
+                      FactResponse(fact.path, None, success = false, error = Some(err))
+                    case Right(writable) =>
+                      val (ok, violations) = graph.set(Path(fact.path), writable)
+                      if ok then FactResponse(fact.path, Some(writable.toString), success = true)
+                      else
+                        FactResponse(
+                          fact.path,
+                          None,
+                          success = false,
+                          error = Some(
+                          s"Limit violation(s): ${violations.map(_.toString).mkString("; ")}",
+                          ),
+                        )
               catch
                 case e: Exception =>
                   FactResponse(fact.path, None, success = false, error = Some(e.getMessage))
             }
-            graph.save()
             Ok(results.asJson)
           case None =>
-            BadRequest(Json. obj("error" -> "No graph initialized".asJson))
+            BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
     
     // Get a fact value
@@ -118,15 +283,14 @@ object FactGraphServer extends IOApp:
           case Some(graph) =>
             try
               val result = graph.get(Path(body.path))
-              val value = result match
-                case Some(v) => Some(v.toString)
-                case None => None
+              // Result monad has .value method that returns Option[A]
+              val value = result.value.map(_.toString)
               Ok(FactResponse(body.path, value, success = true).asJson)
             catch
               case e: Exception =>
                 BadRequest(FactResponse(body.path, None, success = false, error = Some(e.getMessage)).asJson)
           case None =>
-            BadRequest(Json. obj("error" -> "No graph initialized".asJson))
+            BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
     
     // Get the entire graph as JSON
