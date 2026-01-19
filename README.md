@@ -19,7 +19,7 @@ It can be used in JavaScript as well as any JVM language (Java, Kotlin, Scala, C
 See [ONBOARDING.md](ONBOARDING.md) for environment/developer setup.
 
 See [the Fact Graph 3.1 ADR](docs/fact-graph-3.1-adr.md) for more information about the fact graph and how it has been changed since early 2025
-See [here](docs/from-3.0-to-3.1.md) for a brief description of changes between the older versions of the Fact Graph and the current v3.1 in this repository 
+See [here](docs/from-3.0-to-3.1.md) for a brief description of changes between the older versions of the Fact Graph and the current v3.1 in this repository
 
 ## Fact Graph API (local demo)
 The repository includes a small REST API wrapper and a docker-compose definition for local testing.
@@ -160,10 +160,42 @@ The Fact Graph API includes endpoints designed for AI agents to discover, comput
   # {"changedPaths": ["/totalWages"], "addedPaths": ["/newFact"], "removedPaths": []}
   ```
 
+### Collection Management
+
+- **`POST /collection/add`**: Add item to collection
+  ```bash
+  curl -X POST http://localhost:8080/collection/add \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/formW2s","uuid":"w2-2024-001"}'
+  # {"path":"/formW2s/#w2-2024-001","success":true}
+  ```
+
+- **`POST /collection/remove`**: Remove item from collection
+  ```bash
+  curl -X POST http://localhost:8080/collection/remove \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/formW2s","uuid":"w2-2024-001"}'
+  # {"success":true}
+  ```
+
+**Example workflow:**
+```bash
+# Add a W-2 to the collection
+curl -X POST http://localhost:8080/collection/add \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/formW2s","uuid":"w2-2024-001"}'
+
+# Set facts on the W-2 item
+curl -X POST http://localhost:8080/fact/set \
+  -H "Content-Type: application/json" \
+  -d '{"path":"/formW2s/#w2-2024-001/writableWages","value":50000}'
+```
+
 ### Supported Fact Types
 
 The `/fact/set` and `/facts/set` endpoints support these fact types with automatic type coercion:
 
+**Simple Types:**
 - `StringNode`: JSON string
 - `IntNode`: JSON number or numeric string
 - `BooleanNode`: JSON boolean or "true"/"false" string
@@ -175,12 +207,30 @@ The `/fact/set` and `/facts/set` endpoints support these fact types with automat
 - `PhoneNumberNode`: Phone number string (E.164 format)
 - `EmailAddressNode`: Email string
 
+**Complex Types:**
+- `AddressNode`: JSON object with address fields
+  ```bash
+  curl -X POST http://localhost:8080/fact/set \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/address","value":{"streetAddress":"123 Main St","city":"Springfield","postalCode":"62701","stateOrProvence":"IL","streetAddressLine2":"","country":"United States of America"}}'
+  ```
+  Required fields: `streetAddress`, `city`, `postalCode`, `stateOrProvence`  
+  Optional fields: `streetAddressLine2` (defaults to ""), `country` (defaults to "United States of America")
+
+- `BankAccountNode`: JSON object with bank account fields
+  ```bash
+  curl -X POST http://localhost:8080/fact/set \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/bankAccount","value":{"accountType":"Checking","routingNumber":"021000021","accountNumber":"1234567890"}}'
+  ```
+  Required fields: `accountType` ("Checking" or "Savings"), `routingNumber` (9 digits), `accountNumber` (5-17 alphanumeric characters)
+
 Type validation errors return structured error messages for agent handling.
 
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## Repository Update Frequency 
+## Repository Update Frequency
 
 This repository is updated frequently. Development occurs in a private repository and approved changes to `main` are pushed to this repository in real-time.
 
@@ -188,7 +238,7 @@ This repository is updated frequently. Development occurs in a private repositor
 * [ScalaTest](https://www.scalatest.org/) - the testing framework we use
 * [scala-xml](https://www.scala-lang.org/api/2.12.19/scala-xml/scala/xml/) - the standard implementation of XML (don't be put off by the sparse-seeming API docs, the function definitions have very good examples)
 
-  
+
 ## Authorities
 Legal foundations for this work include:
 * Source Code Harmonization And Reuse in Information Technology Act" of 2024, Public Law 118 - 187

@@ -15,7 +15,7 @@ import com.comcast.ip4s.*
 
 import gov.irs.factgraph.{FactDictionary, Graph, Path}
 import gov.irs.factgraph.persisters.InMemoryPersister
-import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, WritableType}
+import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, Address, BankAccount, WritableType}
 
 import scala.io.Source
 import java.io.File
@@ -42,9 +42,11 @@ case class ExplainNode(path: String, currentValue: Option[String], isComplete: B
 case class GraphSnapshotResponse(snapshot: String, timestamp: Long, factCount: Int)
 case class GraphDiffRequest(beforeSnapshot: String, afterSnapshot: String)
 case class GraphDiffResponse(changedPaths: List[String], addedPaths: List[String], removedPaths: List[String])
+case class AddToCollectionRequest(path: String, uuid: String)
+case class RemoveFromCollectionRequest(path: String, uuid: String)
 
-object FactGraphServer extends IOApp: 
-  
+object FactGraphServer extends IOApp:
+
   // Thread-safe state management
   private var currentDictionary: Option[FactDictionary] = None
   private var currentGraph: Option[Graph] = None
@@ -52,12 +54,12 @@ object FactGraphServer extends IOApp:
   // Dependency indexes built at startup
   private var forwardDeps: Map[String, List[DependencyInfo]] = Map.empty
   private var reverseDeps: Map[String, Set[String]] = Map.empty
-  
+
   // Load dictionary from file or directory
   private def loadDefaultDictionary(): Unit =
     val defaultPath = sys.env.getOrElse("FACT_DICTIONARY_PATH", "/app/dictionaries")
     val file = new File(defaultPath)
-    
+
     if file.isDirectory then
       val xmlFiles = file.listFiles().filter(_.getName.endsWith(".xml")).sortBy(_.getName)
 
@@ -142,11 +144,11 @@ object FactGraphServer extends IOApp:
 
   // Routes
   val routes: HttpRoutes[IO] = HttpRoutes.of[IO] {
-    
+
     // Health check
     case GET -> Root / "health" =>
       Ok(HealthResponse("healthy", "3.1.0-SNAPSHOT").asJson)
-    
+
     // Load a fact dictionary from XML
     case req @ POST -> Root / "dictionary" / "load" =>
       req.as[LoadDictionaryRequest]. flatMap { body =>
@@ -163,7 +165,7 @@ object FactGraphServer extends IOApp:
           case e: Exception =>
             BadRequest(Json. obj("success" -> false.asJson, "error" -> e.getMessage.asJson))
       }
-    
+
     // Get all available paths in the dictionary
     case GET -> Root / "paths" =>
       currentGraph match
@@ -380,6 +382,29 @@ object FactGraphServer extends IOApp:
                           try Right(EmailAddress(s))
                           catch case e: Exception => Left(s"Invalid email format: ${e.getMessage}")
                         case None =>                       Left("Expected an email string")
+                    case "AddressNode" =>
+                      body.value.asObject match
+                        case Some(obj) =>
+                          val streetAddress = obj("streetAddress").flatMap(_.asString).getOrElse("")
+                          val city = obj("city").flatMap(_.asString).getOrElse("")
+                          val postalCode = obj("postalCode").flatMap(_.asString).getOrElse("")
+                          val stateOrProvence = obj("stateOrProvence").flatMap(_.asString).getOrElse("")
+                          val streetAddressLine2 = obj("streetAddressLine2").flatMap(_.asString).getOrElse("")
+                          val country = obj("country").flatMap(_.asString).getOrElse("United States of America")
+                          try Right(Address(streetAddress, city, postalCode, stateOrProvence, streetAddressLine2, country))
+                          catch case e: Exception => Left(s"Invalid address format: ${e.getMessage}")
+                        case None =>
+                          Left("Expected an address object with fields: streetAddress, city, postalCode, stateOrProvence, [streetAddressLine2], [country]")
+                    case "BankAccountNode" =>
+                      body.value.asObject match
+                        case Some(obj) =>
+                          val accountType = obj("accountType").flatMap(_.asString).getOrElse("")
+                          val routingNumber = obj("routingNumber").flatMap(_.asString).getOrElse("")
+                          val accountNumber = obj("accountNumber").flatMap(_.asString).getOrElse("")
+                          try Right(BankAccount(accountType, routingNumber, accountNumber))
+                          catch case e: Exception => Left(s"Invalid bank account format: ${e.getMessage}")
+                        case None =>
+                          Left("Expected a bank account object with fields: accountType, routingNumber, accountNumber")
                     case other =>
                       Left(s"Unsupported writable type: $other")
 
@@ -408,7 +433,7 @@ object FactGraphServer extends IOApp:
           case None =>
             BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
-    
+
     // Set multiple facts in batch
     case req @ POST -> Root / "facts" / "set" =>
       req.as[BatchSetRequest].flatMap { body =>
@@ -505,6 +530,29 @@ object FactGraphServer extends IOApp:
                             try Right(EmailAddress(s))
                             catch case e: Exception => Left(s"Invalid email format: ${e.getMessage}")
                           case None =>                       Left("Expected an email string")
+                      case "AddressNode" =>
+                        fact.value.asObject match
+                          case Some(obj) =>
+                            val streetAddress = obj("streetAddress").flatMap(_.asString).getOrElse("")
+                            val city = obj("city").flatMap(_.asString).getOrElse("")
+                            val postalCode = obj("postalCode").flatMap(_.asString).getOrElse("")
+                            val stateOrProvence = obj("stateOrProvence").flatMap(_.asString).getOrElse("")
+                            val streetAddressLine2 = obj("streetAddressLine2").flatMap(_.asString).getOrElse("")
+                            val country = obj("country").flatMap(_.asString).getOrElse("United States of America")
+                            try Right(Address(streetAddress, city, postalCode, stateOrProvence, streetAddressLine2, country))
+                            catch case e: Exception => Left(s"Invalid address format: ${e.getMessage}")
+                          case None =>
+                            Left("Expected an address object with fields: streetAddress, city, postalCode, stateOrProvence, [streetAddressLine2], [country]")
+                      case "BankAccountNode" =>
+                        fact.value.asObject match
+                          case Some(obj) =>
+                            val accountType = obj("accountType").flatMap(_.asString).getOrElse("")
+                            val routingNumber = obj("routingNumber").flatMap(_.asString).getOrElse("")
+                            val accountNumber = obj("accountNumber").flatMap(_.asString).getOrElse("")
+                            try Right(BankAccount(accountType, routingNumber, accountNumber))
+                            catch case e: Exception => Left(s"Invalid bank account format: ${e.getMessage}")
+                          case None =>
+                            Left("Expected a bank account object with fields: accountType, routingNumber, accountNumber")
                       case other =>
                         Left(s"Unsupported writable type: $other")
 
@@ -531,7 +579,7 @@ object FactGraphServer extends IOApp:
           case None =>
             BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
-    
+
     // Get a fact value
     case req @ POST -> Root / "fact" / "get" =>
       req.as[GetFactRequest].flatMap { body =>
@@ -548,7 +596,7 @@ object FactGraphServer extends IOApp:
           case None =>
             BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
-    
+
     // Get the entire graph as JSON
     case GET -> Root / "graph" =>
       currentGraph match
@@ -557,7 +605,7 @@ object FactGraphServer extends IOApp:
           Ok(GraphResponse(json).asJson)
         case None =>
           BadRequest(Json.obj("error" -> "No graph initialized".asJson))
-    
+
     // Load graph state from JSON
     case req @ POST -> Root / "graph" / "load" =>
       req.as[LoadGraphRequest].flatMap { body =>
@@ -573,7 +621,7 @@ object FactGraphServer extends IOApp:
           case None =>
             BadRequest(Json.obj("error" -> "No dictionary loaded". asJson))
       }
-    
+
     // Reset the graph (keep dictionary, clear facts)
     case POST -> Root / "graph" / "reset" =>
       currentDictionary match
@@ -629,14 +677,88 @@ object FactGraphServer extends IOApp:
           case e: Exception =>
             BadRequest(Json.obj("error" -> s"Failed to diff snapshots: ${e.getMessage}".asJson))
       }
+
+    // Add item to collection
+    case req @ POST -> Root / "collection" / "add" =>
+      req.as[AddToCollectionRequest].flatMap { body =>
+        currentGraph match
+          case Some(graph) =>
+            try
+              val maybeDefinition = graph.dictionary.getDefinition(body.path)
+              if (maybeDefinition == null) then
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Unknown path: ${body.path}".asJson
+                ))
+              else if (maybeDefinition.typeNode != "CollectionNode") then
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Path '${body.path}' is not a collection".asJson
+                ))
+              else
+                graph.addToCollection(body.path, body.uuid)
+                val fullPath = s"${body.path}/#${body.uuid}"
+                Ok(Json.obj(
+                  "path" -> fullPath.asJson,
+                  "success" -> true.asJson
+                ))
+            catch
+              case e: IllegalArgumentException =>
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Invalid UUID format: ${e.getMessage}".asJson
+                ))
+              case e: Exception =>
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> e.getMessage.asJson
+                ))
+          case None =>
+            BadRequest(Json.obj("error" -> "No graph initialized".asJson))
+      }
+
+    // Remove item from collection
+    case req @ POST -> Root / "collection" / "remove" =>
+      req.as[RemoveFromCollectionRequest].flatMap { body =>
+        currentGraph match
+          case Some(graph) =>
+            try
+              val maybeDefinition = graph.dictionary.getDefinition(body.path)
+              if (maybeDefinition == null) then
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Unknown path: ${body.path}".asJson
+                ))
+              else if (maybeDefinition.typeNode != "CollectionNode") then
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Path '${body.path}' is not a collection".asJson
+                ))
+              else
+                graph.removeFromCollection(body.path, body.uuid)
+                Ok(Json.obj("success" -> true.asJson))
+            catch
+              case e: IllegalArgumentException =>
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> s"Invalid UUID format: ${e.getMessage}".asJson
+                ))
+              case e: Exception =>
+                BadRequest(Json.obj(
+                  "success" -> false.asJson,
+                  "error" -> e.getMessage.asJson
+                ))
+          case None =>
+            BadRequest(Json.obj("error" -> "No graph initialized".asJson))
+      }
   }
-  
+
   override def run(args: List[String]): IO[ExitCode] =
     // Load default dictionary on startup
     loadDefaultDictionary()
-    
+
     val port = sys.env.getOrElse("PORT", "8080").toInt
-    
+
     EmberServerBuilder
       .default[IO]
       .withHost(host"0.0.0.0")
