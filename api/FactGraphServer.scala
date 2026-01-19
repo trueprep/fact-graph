@@ -15,7 +15,9 @@ import com.comcast.ip4s.*
 
 import gov.irs.factgraph.{FactDictionary, Graph, Path}
 import gov.irs.factgraph.persisters.InMemoryPersister
-import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, Address, BankAccount, Enum, MultiEnum, WritableType}
+import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, Address, BankAccount, Enum, MultiEnum, WritableType, Collection, CollectionItem}
+
+import java.util.UUID
 
 import scala.io.Source
 import java.io.File
@@ -431,6 +433,20 @@ object FactGraphServer extends IOApp:
                               Left("Could not determine enum options path for this fact")
                         case None =>
                           Left("Expected an array of string values for multi-enum")
+                    case "CollectionNode" =>
+                      body.value.asArray match
+                        case Some(arr) =>
+                          try
+                            val uuids = arr.flatMap(_.asString).map(UUID.fromString(_))
+                            Right(Collection(uuids.toVector))
+                          catch case e: Exception => Left(s"Invalid UUID array: ${e.getMessage}")
+                        case None => Left("Expected an array of UUID strings")
+                    case "CollectionItemNode" =>
+                      body.value.asString match
+                        case Some(s) =>
+                          try Right(CollectionItem(UUID.fromString(s)))
+                          catch case e: Exception => Left(s"Invalid UUID: ${e.getMessage}")
+                        case None => Left("Expected a UUID string")
                     case other =>
                       Left(s"Unsupported writable type: $other")
 
@@ -606,6 +622,20 @@ object FactGraphServer extends IOApp:
                                 Left("Could not determine enum options path for this fact")
                           case None =>
                             Left("Expected an array of string values for multi-enum")
+                      case "CollectionNode" =>
+                        fact.value.asArray match
+                          case Some(arr) =>
+                            try
+                              val uuids = arr.flatMap(_.asString).map(UUID.fromString(_))
+                              Right(Collection(uuids.toVector))
+                            catch case e: Exception => Left(s"Invalid UUID array: ${e.getMessage}")
+                          case None => Left("Expected an array of UUID strings")
+                      case "CollectionItemNode" =>
+                        fact.value.asString match
+                          case Some(s) =>
+                            try Right(CollectionItem(UUID.fromString(s)))
+                            catch case e: Exception => Left(s"Invalid UUID: ${e.getMessage}")
+                          case None => Left("Expected a UUID string")
                       case other =>
                         Left(s"Unsupported writable type: $other")
 

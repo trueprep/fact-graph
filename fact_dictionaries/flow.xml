@@ -38,9 +38,7 @@
           <Dependency module="formW2s" path="/anyFilerExceedsMaxOasdiWages" />
           <Dependency module="formW2s" path="/flowKnockoutHasRRTACodesInBox14NotInNY" />
           <Dependency module="formW2s" path="/knockoutYonkersPartYear" />
-          <Dependency module="form1099Rs" path="/flowKnockoutRetirementTaxableAmountNotDetermined" />
-          <Dependency module="form1099Rs"
-            path="/flowKnockoutRetirementTaxableAmountNotDeterminedNotCheckedTaxableAmountBlank" />
+          <Dependency module="form1099Rs" path="/form1099Rs/*/box2bTaxableAmountNotDetermined" />
           <Dependency module="form1099Rs" path="/flowKnockoutRetirementTotalDistribution" />
           <Dependency module="form1099Rs" path="/knockoutForForm1099RBox8Value" />
           <Dependency module="form1099Rs" path="/knockoutForForm1099RBox8Percentage" />

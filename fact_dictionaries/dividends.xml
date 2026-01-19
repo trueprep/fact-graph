@@ -1,0 +1,419 @@
+<?xml-model href="./FactDictionaryModule.rng"?>
+<FactDictionaryModule>
+  <Facts>
+    <Fact path="/form1099Divs">
+      <Name>Form 1099-DIV Collection</Name>
+      <Description>Collection of all Form 1099-DIV dividend income reports received by the taxpayer</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Collection />
+      </Writable>
+    </Fact>
+    <Fact path="/form1099Divs/*/payerName">
+      <Name>Payer Name</Name>
+      <Description>Name of the entity that paid the dividends</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <String />
+      </Writable>
+    </Fact>
+    <Fact path="/form1099Divs/*/payerTIN">
+      <Name>Payer TIN</Name>
+      <Description>Taxpayer identification number of the payer</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <EIN />
+      </Writable>
+    </Fact>
+    <Fact path="/form1099Divs/*/ordinaryDividends">
+      <Name>Ordinary Dividends (Box 1a)</Name>
+      <Description>Total ordinary dividends reported in Box 1a of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/qualifiedDividends">
+      <Name>Qualified Dividends (Box 1b)</Name>
+      <Description>Qualified dividends reported in Box 1b of Form 1099-DIV, eligible for preferential tax rates</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/totalCapitalGainDistributions">
+      <Name>Total Capital Gain Distributions (Box 2a)</Name>
+      <Description>Total capital gain distributions reported in Box 2a of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/unrecaptured1250Gain">
+      <Name>Unrecaptured Section 1250 Gain (Box 2b)</Name>
+      <Description>Unrecaptured section 1250 gain reported in Box 2b of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/section1202Gain">
+      <Name>Section 1202 Gain (Box 2c)</Name>
+      <Description>Section 1202 gain reported in Box 2c of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/collectiblesGain">
+      <Name>Collectibles (28%) Gain (Box 2d)</Name>
+      <Description>Collectibles (28%) gain reported in Box 2d of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/section897OrdinaryDividends">
+      <Name>Section 897 Ordinary Dividends (Box 2e)</Name>
+      <Description>Section 897 ordinary dividends reported in Box 2e of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/section897CapitalGain">
+      <Name>Section 897 Capital Gain (Box 2f)</Name>
+      <Description>Section 897 capital gain reported in Box 2f of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/nondividendDistributions">
+      <Name>Nondividend Distributions (Box 3)</Name>
+      <Description>Nondividend distributions reported in Box 3 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/federalIncomeTaxWithheld">
+      <Name>Federal Income Tax Withheld (Box 4)</Name>
+      <Description>Federal income tax withheld reported in Box 4 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/section199ADividends">
+      <Name>Section 199A Dividends (Box 5)</Name>
+      <Description>Section 199A dividends reported in Box 5 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/investmentExpenses">
+      <Name>Investment Expenses (Box 6)</Name>
+      <Description>Investment expenses reported in Box 6 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/foreignTaxPaid">
+      <Name>Foreign Tax Paid (Box 7)</Name>
+      <Description>Foreign tax paid reported in Box 7 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/foreignCountryOrPossession">
+      <Name>Foreign Country or U.S. Possession (Box 8)</Name>
+      <Description>Name of foreign country or U.S. possession reported in Box 8 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <String />
+      </Writable>
+    </Fact>
+    <Fact path="/form1099Divs/*/cashLiquidationDistributions">
+      <Name>Cash Liquidation Distributions (Box 9)</Name>
+      <Description>Cash liquidation distributions reported in Box 9 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/noncashLiquidationDistributions">
+      <Name>Noncash Liquidation Distributions (Box 10)</Name>
+      <Description>Noncash liquidation distributions reported in Box 10 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/exemptInterestDividends">
+      <Name>Exempt-Interest Dividends (Box 11)</Name>
+      <Description>Exempt-interest dividends reported in Box 11 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/specifiedPrivateActivityBondInterestDividends">
+      <Name>Specified Private Activity Bond Interest Dividends (Box 12)</Name>
+      <Description>Specified private activity bond interest dividends reported in Box 12 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/stateTaxWithheld">
+      <Name>State Tax Withheld (Box 13)</Name>
+      <Description>State tax withheld reported in Box 13 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <Dollar />
+      </Writable>
+      <Placeholder>
+        <Dollar>0</Dollar>
+      </Placeholder>
+      <Limits>
+        <Min>
+          <Dollar>0</Dollar>
+        </Min>
+      </Limits>
+    </Fact>
+    <Fact path="/form1099Divs/*/state">
+      <Name>State (Box 14)</Name>
+      <Description>State reported in Box 14 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <String />
+      </Writable>
+    </Fact>
+    <Fact path="/form1099Divs/*/stateIdentificationNumber">
+      <Name>State Identification Number (Box 15)</Name>
+      <Description>State identification number reported in Box 15 of Form 1099-DIV</Description>
+      <TaxYear>2025</TaxYear>
+      <Writable>
+        <String />
+      </Writable>
+    </Fact>
+    <Fact path="/totalOrdinaryDividends">
+      <Name>Total Ordinary Dividends</Name>
+      <Description>Sum of all ordinary dividends from all Form 1099-DIV reports, reported on Form 1040, Line 3b</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/ordinaryDividends" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+    <Fact path="/totalQualifiedDividends">
+      <Name>Total Qualified Dividends</Name>
+      <Description>Sum of all qualified dividends from all Form 1099-DIV reports, reported on Form 1040, Line 3a</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/qualifiedDividends" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+    <Fact path="/totalCapitalGainDistributions">
+      <Name>Total Capital Gain Distributions</Name>
+      <Description>Sum of all capital gain distributions from all Form 1099-DIV reports, used in Schedule D calculations</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/totalCapitalGainDistributions" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+    <Fact path="/totalFederalTaxWithheldDividends">
+      <Name>Total Federal Tax Withheld from Dividends</Name>
+      <Description>Sum of all federal income tax withheld from all Form 1099-DIV reports</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/federalIncomeTaxWithheld" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+    <Fact path="/totalForeignTaxPaidDividends">
+      <Name>Total Foreign Tax Paid on Dividends</Name>
+      <Description>Sum of all foreign tax paid from all Form 1099-DIV reports, used for foreign tax credit calculations</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/foreignTaxPaid" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+    <Fact path="/totalSection199ADividends">
+      <Name>Total Section 199A Dividends</Name>
+      <Description>Sum of all section 199A dividends from all Form 1099-DIV reports, used in qualified business income deduction calculations</Description>
+      <TaxYear>2025</TaxYear>
+      <Export mef="true" downstreamFacts="true" />
+      <Derived>
+        <Round>
+          <CollectionSum>
+            <Dependency path="/form1099Divs/*/section199ADividends" />
+          </CollectionSum>
+        </Round>
+      </Derived>
+    </Fact>
+  </Facts>
+</FactDictionaryModule>

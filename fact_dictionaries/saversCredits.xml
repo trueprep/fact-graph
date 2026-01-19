@@ -790,7 +790,7 @@
               <Then>
                 <CollectionSum>
                   <Dependency module="form1099Rs"
-                    path="/primaryFiler1099RsReportedOnSaversCredit/*/grossDistribution" />
+                    path="/primaryFiler1099RsReportedOnSaversCredit/*/box1GrossDistribution" />
                 </CollectionSum>
               </Then>
             </Case>
@@ -868,7 +868,7 @@
               <Then>
                 <CollectionSum>
                   <Dependency module="form1099Rs"
-                    path="/secondaryFiler1099RsReportedOnSaversCredit/*/grossDistribution" />
+                    path="/secondaryFiler1099RsReportedOnSaversCredit/*/box1GrossDistribution" />
                 </CollectionSum>
               </Then>
             </Case>
