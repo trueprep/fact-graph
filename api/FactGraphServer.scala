@@ -15,7 +15,7 @@ import com.comcast.ip4s.*
 
 import gov.irs.factgraph.{FactDictionary, Graph, Path}
 import gov.irs.factgraph.persisters.InMemoryPersister
-import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, Address, BankAccount, WritableType}
+import gov.irs.factgraph.types.{Dollar, Day, Tin, Ein, IpPin, PhoneNumber, EmailAddress, Address, BankAccount, Enum, MultiEnum, WritableType}
 
 import scala.io.Source
 import java.io.File
@@ -405,6 +405,31 @@ object FactGraphServer extends IOApp:
                           catch case e: Exception => Left(s"Invalid bank account format: ${e.getMessage}")
                         case None =>
                           Left("Expected a bank account object with fields: accountType, routingNumber, accountNumber")
+                    case "EnumNode" =>
+                      body.value.asString match
+                        case Some(value) =>
+                          // Get enumOptionsPath from the fact definition
+                          graph.dictionary.getOptionsPathForEnum(body.path) match
+                            case Some(enumOptionsPath) =>
+                              try Right(Enum(value, enumOptionsPath))
+                              catch case e: Exception => Left(s"Invalid enum value: ${e.getMessage}")
+                            case None =>
+                              Left("Could not determine enum options path for this fact")
+                        case None =>
+                          Left("Expected a string value for enum")
+                    case "MultiEnumNode" =>
+                      body.value.asArray match
+                        case Some(arr) =>
+                          val values = arr.flatMap(_.asString).toSet
+                          // Get enumOptionsPath from the fact definition
+                          graph.dictionary.getOptionsPathForEnum(body.path) match
+                            case Some(enumOptionsPath) =>
+                              try Right(MultiEnum(values, enumOptionsPath))
+                              catch case e: Exception => Left(s"Invalid multi-enum values: ${e.getMessage}")
+                            case None =>
+                              Left("Could not determine enum options path for this fact")
+                        case None =>
+                          Left("Expected an array of string values for multi-enum")
                     case other =>
                       Left(s"Unsupported writable type: $other")
 
@@ -553,6 +578,31 @@ object FactGraphServer extends IOApp:
                             catch case e: Exception => Left(s"Invalid bank account format: ${e.getMessage}")
                           case None =>
                             Left("Expected a bank account object with fields: accountType, routingNumber, accountNumber")
+                      case "EnumNode" =>
+                        fact.value.asString match
+                          case Some(value) =>
+                            // Get enumOptionsPath from the fact definition
+                            graph.dictionary.getOptionsPathForEnum(fact.path) match
+                              case Some(enumOptionsPath) =>
+                                try Right(Enum(value, enumOptionsPath))
+                                catch case e: Exception => Left(s"Invalid enum value: ${e.getMessage}")
+                              case None =>
+                                Left("Could not determine enum options path for this fact")
+                          case None =>
+                            Left("Expected a string value for enum")
+                      case "MultiEnumNode" =>
+                        fact.value.asArray match
+                          case Some(arr) =>
+                            val values = arr.flatMap(_.asString).toSet
+                            // Get enumOptionsPath from the fact definition
+                            graph.dictionary.getOptionsPathForEnum(fact.path) match
+                              case Some(enumOptionsPath) =>
+                                try Right(MultiEnum(values, enumOptionsPath))
+                                catch case e: Exception => Left(s"Invalid multi-enum values: ${e.getMessage}")
+                              case None =>
+                                Left("Could not determine enum options path for this fact")
+                          case None =>
+                            Left("Expected an array of string values for multi-enum")
                       case other =>
                         Left(s"Unsupported writable type: $other")
 

@@ -207,6 +207,24 @@ The `/fact/set` and `/facts/set` endpoints support these fact types with automat
 - `PhoneNumberNode`: Phone number string (E.164 format)
 - `EmailAddressNode`: Email string
 
+**Enum Types:**
+- `EnumNode`: JSON string (single selection from predefined options)
+  ```bash
+  curl -X POST http://localhost:8080/fact/set \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/filingStatus","value":"single"}'
+  # {"path":"/filingStatus","value":"single","success":true}
+  ```
+  The enum options path is automatically determined from the fact definition.
+
+- `MultiEnumNode`: JSON array of strings (multiple selections from predefined options)
+  ```bash
+  curl -X POST http://localhost:8080/fact/set \
+    -H "Content-Type: application/json" \
+    -d '{"path":"/incomeTypes","value":["wages","interest"]}'
+  # {"path":"/incomeTypes","value":"wages, interest","success":true}
+  ```
+
 **Complex Types:**
 - `AddressNode`: JSON object with address fields
   ```bash
@@ -214,7 +232,7 @@ The `/fact/set` and `/facts/set` endpoints support these fact types with automat
     -H "Content-Type: application/json" \
     -d '{"path":"/address","value":{"streetAddress":"123 Main St","city":"Springfield","postalCode":"62701","stateOrProvence":"IL","streetAddressLine2":"","country":"United States of America"}}'
   ```
-  Required fields: `streetAddress`, `city`, `postalCode`, `stateOrProvence`  
+  Required fields: `streetAddress`, `city`, `postalCode`, `stateOrProvence`
   Optional fields: `streetAddressLine2` (defaults to ""), `country` (defaults to "United States of America")
 
 - `BankAccountNode`: JSON object with bank account fields
