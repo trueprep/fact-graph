@@ -28,7 +28,7 @@ case class GetFactRequest(path: String)
 case class BatchSetRequest(facts: List[SetFactRequest])
 case class LoadDictionaryRequest(xml: String)
 case class LoadGraphRequest(json: String)
-case class FactResponse(path: String, value: Option[String], success: Boolean, error: Option[String] = None)
+case class FactResponse(path: String, value: Option[String], success: Boolean, isComplete: Boolean = false, error: Option[String] = None)
 case class GraphResponse(json: String)
 case class PathsResponse(paths: List[String])
 case class HealthResponse(status: String, version: String)
@@ -298,6 +298,7 @@ object FactGraphServer extends IOApp:
                     body.path,
                     None,
                     success = false,
+                    isComplete = false,
                     error = Some(s"Unknown fact path: ${body.path}"),
                   ).asJson,
                 )
@@ -436,17 +437,18 @@ object FactGraphServer extends IOApp:
                 coerced match
                   case Left(err) =>
                     BadRequest(
-                      FactResponse(body.path, None, success = false, error = Some(err)).asJson,
+                      FactResponse(body.path, None, success = false, isComplete = false, error = Some(err)).asJson,
                     )
                   case Right(writable) =>
                     val (ok, violations) = graph.set(Path(body.path), writable)
-                    if ok then Ok(FactResponse(body.path, Some(writable.toString), success = true).asJson)
+                    if ok then Ok(FactResponse(body.path, Some(writable.toString), success = true, isComplete = true).asJson)
                     else
                       BadRequest(
                         FactResponse(
                           body.path,
                           None,
                           success = false,
+                          isComplete = false,
                           error = Some(
                             s"Limit violation(s): ${violations.map(_.toString).mkString("; ")}",
                           ),
@@ -454,7 +456,7 @@ object FactGraphServer extends IOApp:
                       )
             catch
               case e: Exception =>
-                BadRequest(FactResponse(body.path, None, success = false, error = Some(e.getMessage)).asJson)
+                BadRequest(FactResponse(body.path, None, success = false, isComplete = false, error = Some(e.getMessage)).asJson)
           case None =>
             BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }
@@ -472,6 +474,7 @@ object FactGraphServer extends IOApp:
                     fact.path,
                     None,
                     success = false,
+                    isComplete = false,
                     error = Some(s"Unknown fact path: ${fact.path}"),
                   )
                 else
@@ -608,22 +611,23 @@ object FactGraphServer extends IOApp:
 
                   coerced match
                     case Left(err) =>
-                      FactResponse(fact.path, None, success = false, error = Some(err))
+                      FactResponse(fact.path, None, success = false, isComplete = false, error = Some(err))
                     case Right(writable) =>
                       val (ok, violations) = graph.set(Path(fact.path), writable)
-                      if ok then FactResponse(fact.path, Some(writable.toString), success = true)
+                      if ok then FactResponse(fact.path, Some(writable.toString), success = true, isComplete = true)
                       else
                         FactResponse(
                           fact.path,
                           None,
                           success = false,
+                          isComplete = false,
                           error = Some(
                           s"Limit violation(s): ${violations.map(_.toString).mkString("; ")}",
                           ),
                         )
               catch
                 case e: Exception =>
-                  FactResponse(fact.path, None, success = false, error = Some(e.getMessage))
+                  FactResponse(fact.path, None, success = false, isComplete = false, error = Some(e.getMessage))
             }
             Ok(results.asJson)
           case None =>
@@ -639,10 +643,11 @@ object FactGraphServer extends IOApp:
               val result = graph.get(Path(body.path))
               // Result monad has .value method that returns Option[A]
               val value = result.value.map(_.toString)
-              Ok(FactResponse(body.path, value, success = true).asJson)
+              val isComplete = result.complete
+              Ok(FactResponse(body.path, value, success = true, isComplete).asJson)
             catch
               case e: Exception =>
-                BadRequest(FactResponse(body.path, None, success = false, error = Some(e.getMessage)).asJson)
+                BadRequest(FactResponse(body.path, None, success = false, isComplete = false, error = Some(e.getMessage)).asJson)
           case None =>
             BadRequest(Json.obj("error" -> "No graph initialized".asJson))
       }

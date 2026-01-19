@@ -92,26 +92,74 @@ The Fact Graph API includes endpoints designed for AI agents to discover, comput
   ```bash
   # String fact
   curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/importedPrimaryFilerFirstName","value":"John"}'
-  # {"path":"/importedPrimaryFilerFirstName","value":"John","success":true}
+  # {"path":"/importedPrimaryFilerFirstName","value":"John","success":true,"isComplete":true}
 
   # Dollar fact (accepts number or string)
   curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/totalWages","value":75000}'
-  # {"path":"/totalWages","value":"75000.00","success":true}
+  # {"path":"/totalWages","value":"75000.00","success":true,"isComplete":true}
 
   # Date fact (ISO-8601 string)
   curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/someDate","value":"2024-01-15"}'
-  # {"path":"/someDate","value":"2024-01-15","success":true}
+  # {"path":"/someDate","value":"2024-01-15","success":true,"isComplete":true}
 
   # TIN fact
   curl -X POST http://localhost:8080/fact/set -H "Content-Type: application/json" -d '{"path":"/someTin","value":"123456789"}'
-  # {"path":"/someTin","value":"123-45-6789","success":true}
+  # {"path":"/someTin","value":"123-45-6789","success":true,"isComplete":true}
   ```
 
 - **`POST /fact/get`**: Get a fact value (including computed/derived facts)
   ```bash
   curl -X POST http://localhost:8080/fact/get -H "Content-Type: application/json" -d '{"path":"/totalAdjustedGrossIncome"}'
-  # {"path":"/totalAdjustedGrossIncome","value":"75000.00","success":true}
+  # {"path":"/totalAdjustedGrossIncome","value":"75000.00","success":true,"isComplete":true}
   ```
+
+#### Understanding Result States
+
+The `/fact/get` endpoint returns an `isComplete` boolean that indicates whether the value is definitive or provisional:
+
+**Complete (Definitive Value)**
+```json
+{
+  "path": "/totalAdjustedGrossIncome",
+  "value": "75000.00",
+  "success": true,
+  "isComplete": true
+}
+```
+All dependencies are satisfied. The value is definitive and reliable.
+
+**Placeholder (Provisional Value)**
+```json
+{
+  "path": "/estimatedTax",
+  "value": "0.00",
+  "success": true,
+  "isComplete": false
+}
+```
+Some dependencies are missing, but a best-effort value is provided (e.g., from a `<Placeholder>` node in the dictionary). `isComplete: false` but `value` is present.
+
+**Incomplete (No Value)**
+```json
+{
+  "path": "/requiredCalculation",
+  "value": null,
+  "success": true,
+  "isComplete": false
+}
+```
+Cannot compute any value. Both `isComplete: false` and `value: null`.
+
+**Client-side handling:**
+```javascript
+if (response.isComplete) {
+  // Definitive value - use with confidence
+} else if (response.value !== null) {
+  // Placeholder - show but mark as provisional/estimated
+} else {
+  // Incomplete - no value available, more input needed
+}
+```
 
 - **`GET /fact/explain?path=/factPath&includeXml=true`**: Get structured explanation
   ```bash
@@ -213,7 +261,7 @@ The `/fact/set` and `/facts/set` endpoints support these fact types with automat
   curl -X POST http://localhost:8080/fact/set \
     -H "Content-Type: application/json" \
     -d '{"path":"/filingStatus","value":"single"}'
-  # {"path":"/filingStatus","value":"single","success":true}
+  # {"path":"/filingStatus","value":"single","success":true,"isComplete":true}
   ```
   The enum options path is automatically determined from the fact definition.
 
@@ -222,7 +270,7 @@ The `/fact/set` and `/facts/set` endpoints support these fact types with automat
   curl -X POST http://localhost:8080/fact/set \
     -H "Content-Type: application/json" \
     -d '{"path":"/incomeTypes","value":["wages","interest"]}'
-  # {"path":"/incomeTypes","value":"wages, interest","success":true}
+  # {"path":"/incomeTypes","value":"wages, interest","success":true,"isComplete":true}
   ```
 
 **Complex Types:**
